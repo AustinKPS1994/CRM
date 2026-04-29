@@ -4,6 +4,7 @@
 # Allow the CRM app files
 !.gitignore
 !README.md
+!index.html
 !MemphisClean CRM.html
 !crm-data.js
 !crm-ui.jsx
