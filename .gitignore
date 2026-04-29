@@ -1,0 +1,20 @@
+# Ignore everything by default
+*
+
+# Allow the CRM app files
+!.gitignore
+!README.md
+!MemphisClean CRM.html
+!crm-data.js
+!crm-ui.jsx
+!crm-auth.jsx
+!crm-views.jsx
+!crm-detail.jsx
+!crm-import.jsx
+!crm-calendar.jsx
+!crm-manager.jsx
+!crm-email.jsx
+
+# Allow the uploads folder and its contents
+!uploads/
+!uploads/**
