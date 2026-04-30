@@ -45,9 +45,15 @@ const AUTH_KEY = 'memphisclean_crm_auth';
 function loadContacts() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Clear any old pre-populated sample data (ids starting with 'c' followed by single digit)
+      const hasSampleData = parsed.some(c => /^c\d$/.test(c.id));
+      if (hasSampleData) { localStorage.removeItem(STORAGE_KEY); return []; }
+      return parsed;
+    }
   } catch (e) {}
-  return window.CRM_DATA.contacts;
+  return [];
 }
 
 function loadSession() {
@@ -73,6 +79,7 @@ function App() {
   const handleLogin = (user) => {
     setCurrentUser(user);
     try {localStorage.setItem(AUTH_KEY, JSON.stringify(user));} catch (e) {}
+    // Default view per role
     setView(user.role === 'admin' ? 'dashboard' : 'queue');
   };
 
@@ -83,9 +90,9 @@ function App() {
   };
 
   // Scope contacts to current user if rep
-  const scopedContacts = currentUser && currentUser.role === 'rep'
-    ? contacts.filter((c) => c.assignedTo === currentUser.id)
-    : contacts;
+  const scopedContacts = currentUser && currentUser.role === 'rep' ?
+  contacts.filter((c) => c.assignedTo === currentUser.id) :
+  contacts;
 
   const openContact = (c) => {
     const fresh = contacts.find((x) => x.id === c.id) || c;
@@ -98,6 +105,7 @@ function App() {
   };
 
   const addContact = (newContact) => {
+    // Assign to current rep, or u1 if admin
     const withAssign = { ...newContact, assignedTo: currentUser?.role === 'rep' ? currentUser.id : newContact.assignedTo || 'u1' };
     setContacts((prev) => [withAssign, ...prev]);
     setShowAddModal(false);
@@ -107,6 +115,7 @@ function App() {
     setContacts((prev) => [...newContacts, ...prev]);
   };
 
+  // Show login screen if not authenticated
   if (!currentUser) {
     return <LoginScreen onLogin={handleLogin} />;
   }
@@ -115,44 +124,49 @@ function App() {
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Sidebar view={view} setView={setView} contacts={scopedContacts} currentUser={currentUser} onLogout={handleLogout} />
 
-      <main style={{ flex: 1, overflowY: 'auto', background: '#F8F9FC' }}>
+      <main style={{ flex: 1, overflowY: 'auto', background: '#F8F9FC', fontSize: "24px" }}>
         {view === 'dashboard' &&
-          <Dashboard contacts={scopedContacts} onOpenContact={openContact} />
+        <Dashboard contacts={scopedContacts} onOpenContact={openContact} />
         }
         {view === 'queue' &&
-          <CallQueue contacts={scopedContacts} setContacts={setContacts} onOpenContact={openContact} />
+        <CallQueue contacts={scopedContacts} setContacts={setContacts} onOpenContact={openContact} />
         }
         {view === 'pipeline' &&
-          <Pipeline contacts={scopedContacts} setContacts={setContacts} onOpenContact={openContact} />
+        <Pipeline contacts={scopedContacts} setContacts={setContacts} onOpenContact={openContact} />
         }
         {view === 'contacts' &&
-          <AllContacts contacts={scopedContacts} onOpenContact={openContact} onAddContact={() => setShowAddModal(true)} />
+        <AllContacts contacts={scopedContacts} onOpenContact={openContact} onAddContact={() => setShowAddModal(true)} />
         }
         {view === 'import' &&
-          <ImportLeads onImport={(newContacts) => { importContacts(newContacts); setTimeout(() => setView('queue'), 1200); }} />
+        <ImportLeads onImport={(newContacts) => {importContacts(newContacts);setTimeout(() => setView('queue'), 1200);}} />
         }
         {view === 'calendar' &&
-          <CalendarView contacts={scopedContacts} onOpenContact={openContact} />
+        <CalendarView contacts={scopedContacts} onOpenContact={openContact} />
         }
         {view === 'manager' &&
-          <ManagerDashboard contacts={contacts} />
+        <ManagerDashboard contacts={contacts} />
+        }
+        {view === 'settings' &&
+        <RepManager />
         }
       </main>
 
       {activeContact &&
-        <ContactDetail
-          contact={activeContact}
-          onClose={() => setActiveContact(null)}
-          onUpdate={updateContact} />
+      <ContactDetail
+        contact={activeContact}
+        onClose={() => setActiveContact(null)}
+        onUpdate={updateContact} />
+
       }
 
       {showAddModal &&
-        <AddContactModal
-          onSave={addContact}
-          onClose={() => setShowAddModal(false)} />
+      <AddContactModal
+        onSave={addContact}
+        onClose={() => setShowAddModal(false)} />
+
       }
-    </div>
-  );
+    </div>);
+
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
