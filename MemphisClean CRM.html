@@ -124,7 +124,7 @@ function App() {
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <Sidebar view={view} setView={setView} contacts={scopedContacts} currentUser={currentUser} onLogout={handleLogout} />
 
-      <main style={{ flex: 1, overflowY: 'auto', background: '#F8F9FC', fontSize: "24px" }}>
+      <main style={{ flex: 1, overflowY: 'auto', background: '#F8F9FC' }}>
         {view === 'dashboard' &&
         <Dashboard contacts={scopedContacts} onOpenContact={openContact} />
         }
