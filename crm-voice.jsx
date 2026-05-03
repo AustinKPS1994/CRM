@@ -13,6 +13,7 @@ function TwilioVoiceSettings({ onClose }) {
   const [tokenUrl,   setTokenUrl]   = useState9(saved.tokenUrl   || '');
   const [fromNumber, setFromNumber] = useState9(saved.fromNumber || '');
   const [ok, setOk] = useState9(false);
+  const [showCode, setShowCode] = useState9(false);
 
   const handleSave = () => {
     localStorage.setItem(VOICE_SETTINGS_KEY, JSON.stringify({ tokenUrl: tokenUrl.trim(), fromNumber: fromNumber.trim() }));
@@ -21,30 +22,49 @@ function TwilioVoiceSettings({ onClose }) {
   };
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center' }} onClick={onClose}>
-      <div style={{ background:'#fff', borderRadius:16, width:560, padding:'28px', boxShadow:'0 24px 80px rgba(0,0,0,0.25)' }} onClick={e=>e.stopPropagation()}>
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:'16px' }} onClick={onClose}>
+      <div style={{ background:'#fff', borderRadius:16, width:'100%', maxWidth:520, maxHeight:'90vh', overflowY:'auto', padding:'28px', boxShadow:'0 24px 80px rgba(0,0,0,0.25)' }} onClick={e=>e.stopPropagation()}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
           <div>
-            <h2 style={{ margin:0, fontSize:17, fontWeight:700, color:'#1A1D2E' }}>Twilio Voice Setup</h2>
+            <h2 style={{ margin:0, fontSize:17, fontWeight:700, color:'#1A1D2E' }}>Twilio Voice Settings</h2>
             <p style={{ margin:'3px 0 0', fontSize:12, color:'#6B7280' }}>Configure browser-to-phone calling</p>
           </div>
           <button onClick={onClose} style={{ border:'none', background:'#F3F4F6', borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:16, color:'#6B7280' }}>×</button>
         </div>
 
-        {/* How it works */}
-        <div style={{ background:'#F0F4FF', border:'1px solid #C7D2FE', borderRadius:10, padding:'14px 16px', marginBottom:20 }}>
-          <div style={{ fontSize:12, fontWeight:700, color:'#4338CA', marginBottom:8 }}>How to set up (one-time)</div>
-          <ol style={{ margin:0, paddingLeft:16, fontSize:12, color:'#374151', lineHeight:2 }}>
-            <li>Go to <strong>console.twilio.com → Functions & Assets</strong></li>
-            <li>Create a <strong>Service</strong> with two Functions (code below)</li>
-            <li>Set env vars: <code style={{ background:'#E0E7FF', padding:'1px 4px', borderRadius:4 }}>ACCOUNT_SID</code>, <code style={{ background:'#E0E7FF', padding:'1px 4px', borderRadius:4 }}>API_KEY</code>, <code style={{ background:'#E0E7FF', padding:'1px 4px', borderRadius:4 }}>API_SECRET</code>, <code style={{ background:'#E0E7FF', padding:'1px 4px', borderRadius:4 }}>TWIML_APP_SID</code>, <code style={{ background:'#E0E7FF', padding:'1px 4px', borderRadius:4 }}>FROM_NUMBER</code></li>
-            <li>Create a <strong>TwiML App</strong> in console → Voice URL = your <code style={{ background:'#E0E7FF', padding:'1px 4px', borderRadius:4 }}>/voice</code> Function URL</li>
-            <li>Paste your <code style={{ background:'#E0E7FF', padding:'1px 4px', borderRadius:4 }}>/token</code> Function URL below</li>
-          </ol>
+        <div style={{ display:'flex', flexDirection:'column', gap:12, marginBottom:20 }}>
+          <div>
+            <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>Token Function URL</label>
+            <input value={tokenUrl} onChange={e=>setTokenUrl(e.target.value)} placeholder="https://your-service-1234.twil.io/token" style={{ width:'100%', padding:'10px 12px', border:'1.5px solid #E5E7EB', borderRadius:8, fontSize:13, outline:'none', boxSizing:'border-box', fontFamily:'monospace' }} />
+          </div>
+          <div>
+            <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>Your Twilio Number (caller ID)</label>
+            <input value={fromNumber} onChange={e=>setFromNumber(e.target.value)} placeholder="+19015192057" style={{ width:'100%', padding:'10px 12px', border:'1.5px solid #E5E7EB', borderRadius:8, fontSize:13, outline:'none', boxSizing:'border-box' }} />
+          </div>
+        </div>
 
-          <div style={{ marginTop:10, display:'flex', flexDirection:'column', gap:6 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:'#4338CA', marginBottom:2 }}>/token Function:</div>
-            <pre style={{ margin:0, background:'#E0E7FF', borderRadius:8, padding:'8px 12px', fontFamily:'monospace', fontSize:11, color:'#3730A3', whiteSpace:'pre-wrap', overflowX:'auto' }}>{`const AccessToken = Twilio.jwt.AccessToken;
+        <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginBottom:16 }}>
+          <button onClick={onClose} style={{ padding:'8px 18px', border:'1.5px solid #E5E7EB', borderRadius:8, background:'#fff', color:'#374151', fontSize:13, fontWeight:600, cursor:'pointer' }}>Cancel</button>
+          <button onClick={handleSave} style={{ padding:'8px 20px', border:'none', borderRadius:8, background: ok ? '#10B981' : NAVY, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', transition:'background 0.2s' }}>
+            {ok ? '✓ Saved!' : 'Save Settings'}
+          </button>
+        </div>
+
+        <button onClick={()=>setShowCode(c=>!c)} style={{ border:'none', background:'none', cursor:'pointer', fontSize:12, color:'#6B7280', padding:0, textDecoration:'underline' }}>
+          {showCode ? 'Hide' : 'Show'} Twilio Function setup instructions
+        </button>
+
+        {showCode && (
+          <div style={{ background:'#F0F4FF', border:'1px solid #C7D2FE', borderRadius:10, padding:'14px 16px', marginTop:12 }}>
+            <ol style={{ margin:0, paddingLeft:16, fontSize:12, color:'#374151', lineHeight:2 }}>
+              <li>Go to <strong>console.twilio.com → Functions & Assets</strong></li>
+              <li>Create a <strong>Service</strong> with two Functions (code below)</li>
+              <li>Set env vars: <code style={{ background:'#E0E7FF', padding:'1px 4px', borderRadius:4 }}>API_KEY</code>, <code style={{ background:'#E0E7FF', padding:'1px 4px', borderRadius:4 }}>API_SECRET</code>, <code style={{ background:'#E0E7FF', padding:'1px 4px', borderRadius:4 }}>TWIML_APP_SID</code>, <code style={{ background:'#E0E7FF', padding:'1px 4px', borderRadius:4 }}>FROM_NUMBER</code></li>
+              <li>Create a <strong>TwiML App</strong> → Voice URL = your <code style={{ background:'#E0E7FF', padding:'1px 4px', borderRadius:4 }}>/voice</code> Function URL</li>
+            </ol>
+            <div style={{ marginTop:10, display:'flex', flexDirection:'column', gap:6 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:'#4338CA', marginBottom:2 }}>/token Function:</div>
+              <pre style={{ margin:0, background:'#E0E7FF', borderRadius:8, padding:'8px 12px', fontFamily:'monospace', fontSize:11, color:'#3730A3', whiteSpace:'pre-wrap', overflowX:'auto' }}>{`const AccessToken = Twilio.jwt.AccessToken;
 const VoiceGrant = AccessToken.VoiceGrant;
 exports.handler = function(context, event, callback) {
   const token = new AccessToken(
@@ -61,33 +81,16 @@ exports.handler = function(context, event, callback) {
   resp.setBody({ token: token.toJwt() });
   callback(null, resp);
 };`}</pre>
-            <div style={{ fontSize:11, fontWeight:700, color:'#4338CA', marginTop:4, marginBottom:2 }}>/voice Function (TwiML App Voice URL):</div>
-            <pre style={{ margin:0, background:'#E0E7FF', borderRadius:8, padding:'8px 12px', fontFamily:'monospace', fontSize:11, color:'#3730A3', whiteSpace:'pre-wrap', overflowX:'auto' }}>{`exports.handler = function(context, event, callback) {
+              <div style={{ fontSize:11, fontWeight:700, color:'#4338CA', marginTop:4, marginBottom:2 }}>/voice Function:</div>
+              <pre style={{ margin:0, background:'#E0E7FF', borderRadius:8, padding:'8px 12px', fontFamily:'monospace', fontSize:11, color:'#3730A3', whiteSpace:'pre-wrap', overflowX:'auto' }}>{`exports.handler = function(context, event, callback) {
   const twiml = new Twilio.twiml.VoiceResponse();
   const dial = twiml.dial({ callerId: context.FROM_NUMBER });
   dial.number(event.To);
   callback(null, twiml);
 };`}</pre>
+            </div>
           </div>
-        </div>
-
-        <div style={{ display:'flex', flexDirection:'column', gap:12, marginBottom:20 }}>
-          <div>
-            <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>Token Function URL</label>
-            <input value={tokenUrl} onChange={e=>setTokenUrl(e.target.value)} placeholder="https://your-service-1234.twil.io/token" style={{ width:'100%', padding:'10px 12px', border:'1.5px solid #E5E7EB', borderRadius:8, fontSize:13, outline:'none', boxSizing:'border-box', fontFamily:'monospace' }} />
-          </div>
-          <div>
-            <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>Your Twilio Number (caller ID)</label>
-            <input value={fromNumber} onChange={e=>setFromNumber(e.target.value)} placeholder="+19015192057" style={{ width:'100%', padding:'10px 12px', border:'1.5px solid #E5E7EB', borderRadius:8, fontSize:13, outline:'none', boxSizing:'border-box' }} />
-          </div>
-        </div>
-
-        <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
-          <button onClick={onClose} style={{ padding:'8px 18px', border:'1.5px solid #E5E7EB', borderRadius:8, background:'#fff', color:'#374151', fontSize:13, fontWeight:600, cursor:'pointer' }}>Cancel</button>
-          <button onClick={handleSave} style={{ padding:'8px 20px', border:'none', borderRadius:8, background: ok ? '#10B981' : NAVY, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', transition:'background 0.2s' }}>
-            {ok ? '✓ Saved!' : 'Save Settings'}
-          </button>
-        </div>
+        )}
       </div>
     </div>
   );
