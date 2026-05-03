@@ -120,12 +120,21 @@ function TwilioDialer({ contact, onClose, onCallEnded }) {
 
     const ensureSDK = () => new Promise((resolve) => {
       if (window.Twilio && window.Twilio.Device) { resolve(true); return; }
-      // Script tag already in page but not yet executed — poll briefly
+      // Try injecting the SDK dynamically if it didn't load from the script tag
+      const inject = () => {
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/@twilio/voice-sdk@2.12.0/dist/twilio.min.js';
+        s.crossOrigin = 'anonymous';
+        s.onload = () => resolve(!!(window.Twilio && window.Twilio.Device));
+        s.onerror = () => resolve(false);
+        document.head.appendChild(s);
+      };
+      // Poll briefly in case the static script tag is still executing
       let tries = 0;
       const poll = setInterval(() => {
         tries++;
         if (window.Twilio && window.Twilio.Device) { clearInterval(poll); resolve(true); return; }
-        if (tries >= 20) { clearInterval(poll); resolve(false); }
+        if (tries >= 8) { clearInterval(poll); inject(); }
       }, 250);
     });
 
