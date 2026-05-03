@@ -114,12 +114,27 @@ function TwilioDialer({ contact, onClose, onCallEnded }) {
   const fmtDuration = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 
   useEffect9(() => {
-    if (!settings.tokenUrl) { setStatus('error'); setError('No Token URL configured. Click ⚙ Setup to configure Twilio Voice.'); return; }
-    if (!window.Twilio || !window.Twilio.Device) { setStatus('error'); setError('Twilio Voice SDK not loaded. Check your internet connection and reload.'); return; }
+    if (!settings.tokenUrl) { setStatus('error'); setError('No Token URL configured. Click ⚙ Twilio to configure.'); return; }
 
     let mounted = true;
+
+    const ensureSDK = () => new Promise((resolve) => {
+      if (window.Twilio && window.Twilio.Device) { resolve(true); return; }
+      // Script tag already in page but not yet executed — poll briefly
+      let tries = 0;
+      const poll = setInterval(() => {
+        tries++;
+        if (window.Twilio && window.Twilio.Device) { clearInterval(poll); resolve(true); return; }
+        if (tries >= 20) { clearInterval(poll); resolve(false); }
+      }, 250);
+    });
+
     (async () => {
       try {
+        const sdkReady = await ensureSDK();
+        if (!mounted) return;
+        if (!sdkReady) { setStatus('error'); setError('Twilio Voice SDK failed to load. Please reload the page and try again.'); return; }
+
         const resp = await fetch(settings.tokenUrl);
         if (!resp.ok) throw new Error(`Token fetch failed: HTTP ${resp.status}`);
         const { token } = await resp.json();
