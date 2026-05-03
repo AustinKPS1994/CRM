@@ -204,7 +204,7 @@ function TwilioDialer({ contact, onClose, onCallEnded }) {
         <div style={{ background:'#fff', borderRadius:20, width:360, padding:'32px 28px', boxShadow:'0 32px 80px rgba(0,0,0,0.3)', textAlign:'center', position:'relative' }} onClick={e=>e.stopPropagation()}>
 
           {/* Settings button */}
-          <button onClick={()=>setShowSettings(true)} title="Twilio Settings" style={{ position:'absolute', top:16, left:16, border:'none', background:'#F3F4F6', borderRadius:8, padding:'5px 10px', cursor:'pointer', fontSize:11, fontWeight:700, color:'#6B7280' }}>⚙</button>
+          <button onClick={()=>setShowSettings(true)} title="Twilio Settings" style={{ position:'absolute', top:16, left:16, border:'1.5px solid #E5E7EB', background:'#fff', borderRadius:8, padding:'5px 12px', cursor:'pointer', fontSize:12, fontWeight:700, color:'#374151', display:'flex', alignItems:'center', gap:4 }}>⚙ Twilio</button>
           <button onClick={status === 'connected' ? handleHangUp : onClose} style={{ position:'absolute', top:16, right:16, border:'none', background:'#F3F4F6', borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:16, color:'#6B7280', display:'flex', alignItems:'center', justifyContent:'center' }}>×</button>
 
           {/* Avatar ring */}
