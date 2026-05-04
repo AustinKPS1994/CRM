@@ -5,9 +5,9 @@ const detailServiceOptions = window.CRM_DATA.services;
 const detailOutcomeOptions = window.CRM_DATA.outcomes;
 const detailStages = window.CRM_DATA.stages;
 
-function CallLogModal({ contact, onSave, onClose }) {
+function CallLogModal({ contact, onSave, onClose, prefilledDuration }) {
   const [form, setForm] = useState3({
-    outcome: '', duration: '', notes: '', nextAction: '', nextActionDate: ''
+    outcome: '', duration: prefilledDuration || '', notes: '', nextAction: '', nextActionDate: ''
   });
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
   const canSave = form.outcome;
@@ -182,10 +182,18 @@ function ContactDetail({ contact, onClose, onUpdate, onLogCall }) {
   const [showCallModal, setShowCallModal] = useState3(false);
   const [showEditModal, setShowEditModal] = useState3(false);
   const [showEmailModal, setShowEmailModal] = useState3(false);
+  const [showDialer, setShowDialer] = useState3(false);
+  const [dialerPrefilledDuration, setDialerPrefilledDuration] = useState3(null);
   const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'short',year:'numeric'}) : '—';
   const fmtTime = iso => iso ? new Date(iso).toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'}) : '';
   const outcomeColor = o => o.includes('Interested')&&!o.includes('Not')?'#10B981':o.includes('Not')?'#F43F5E':o.includes('Callback')?'#F97316':'#6B7280';
   const fmtR = n => n>=1000?`R${(n/1000).toFixed(0)}k/mo`:`R${n}/mo`;
+
+  const handleCallEnded = (duration) => {
+    setDialerPrefilledDuration(duration);
+    setShowDialer(false);
+    setShowCallModal(true);
+  };
 
   const handleLogSave = (entry, nextAction, nextActionDate, newStage) => {
     const updated = {
@@ -223,17 +231,20 @@ function ContactDetail({ contact, onClose, onUpdate, onLogCall }) {
 
         <div style={{ flex:1, padding:'20px 24px', display:'flex', flexDirection:'column', gap:16 }}>
           {/* Actions */}
-          <div style={{ display:'flex', gap:8 }}>
-            <button onClick={()=>setShowCallModal(true)} style={{ flex:1, padding:'9px', background:GOLD, border:'none', borderRadius:8, color:NAVY, fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            <button onClick={()=>setShowDialer(true)} style={{ flex:1, minWidth:100, padding:'9px', background:GOLD, border:'none', borderRadius:8, color:NAVY, fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
               <Icon path="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" size={15} color={NAVY} />
-              Log Call
+              Call
             </button>
-            <button onClick={()=>setShowEmailModal(true)} style={{ padding:'9px 14px', background:'#fff', border:'1.5px solid #E5E7EB', borderRadius:8, color:'#374151', fontSize:13, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
+            <button onClick={()=>setShowCallModal(true)} style={{ padding:'9px 12px', background:'#fff', border:'1.5px solid #E5E7EB', borderRadius:8, color:'#374151', fontSize:13, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
+              <Icon path="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" size={14} color='#374151' />
+              Log
+            </button>
+            <button onClick={()=>setShowEmailModal(true)} style={{ padding:'9px 12px', background:'#fff', border:'1.5px solid #E5E7EB', borderRadius:8, color:'#374151', fontSize:13, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
               <Icon path="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" size={14} color='#374151' />
               Email
             </button>
-            <button onClick={()=>setShowEditModal(true)} style={{ padding:'9px 14px', background:'#fff', border:'1.5px solid #E5E7EB', borderRadius:8, color:'#374151', fontSize:13, fontWeight:600, cursor:'pointer' }}>Edit</button>
-            <a href={`tel:${contact.phone}`} style={{ padding:'9px 14px', background:'#fff', border:'1.5px solid #E5E7EB', borderRadius:8, color:'#374151', fontSize:13, fontWeight:600, cursor:'pointer', textDecoration:'none', display:'flex', alignItems:'center' }}>📞</a>
+            <button onClick={()=>setShowEditModal(true)} style={{ padding:'9px 12px', background:'#fff', border:'1.5px solid #E5E7EB', borderRadius:8, color:'#374151', fontSize:13, fontWeight:600, cursor:'pointer' }}>Edit</button>
           </div>
 
           {/* Contact Info */}
@@ -303,7 +314,8 @@ function ContactDetail({ contact, onClose, onUpdate, onLogCall }) {
         </div>
       </div>
 
-      {showCallModal && <CallLogModal contact={contact} onSave={handleLogSave} onClose={()=>setShowCallModal(false)} />}
+      {showDialer && <TwilioDialer contact={contact} onClose={()=>setShowDialer(false)} onCallEnded={handleCallEnded} />}
+      {showCallModal && <CallLogModal contact={contact} prefilledDuration={dialerPrefilledDuration} onSave={handleLogSave} onClose={()=>{setShowCallModal(false);setDialerPrefilledDuration(null);}} />}
       {showEditModal && <AddContactModal editContact={contact} onSave={(updated)=>{onUpdate(updated);setShowEditModal(false);}} onClose={()=>setShowEditModal(false)} />}
       {showEmailModal && <EmailComposer contact={contact} onClose={()=>setShowEmailModal(false)} />}
     </div>

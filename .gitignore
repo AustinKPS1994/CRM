@@ -15,6 +15,7 @@
 !crm-calendar.jsx
 !crm-manager.jsx
 !crm-email.jsx
+!crm-voice.jsx
 
 # Allow the uploads folder and its contents
 !uploads/
