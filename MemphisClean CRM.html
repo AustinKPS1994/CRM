@@ -165,6 +165,11 @@ function App() {
     batch.commit().catch(console.error);
   };
 
+  const deleteContact = (contact) => {
+    db.collection('contacts').doc(contact.id).delete().catch(console.error);
+    if (activeContact && activeContact.id === contact.id) setActiveContact(null);
+  };
+
   // Show login screen if not authenticated
   if (!currentUser) {
     return <LoginScreen onLogin={handleLogin} />;
@@ -197,7 +202,7 @@ function App() {
           <Pipeline contacts={scopedContacts} setContacts={setContacts} onOpenContact={openContact} />
         }
         {view === 'contacts' &&
-          <AllContacts contacts={scopedContacts} onOpenContact={openContact} onAddContact={() => setShowAddModal(true)} />
+          <AllContacts contacts={scopedContacts} onOpenContact={openContact} onAddContact={() => setShowAddModal(true)} onDeleteContact={deleteContact} />
         }
         {view === 'import' &&
           <ImportLeads onImport={(newContacts) => { importContacts(newContacts); setTimeout(() => setView('queue'), 1200); }} existingContacts={contacts} />
