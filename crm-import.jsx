@@ -1,6 +1,20 @@
 // Excel/CSV Import Screen
 const { useState: useState4, useRef: useRef4, useCallback } = React;
 
+// ── DUPLICATE DETECTION ────────────────────────────────────────────
+function normalizePhone(p) { return (p||'').replace(/[\s\-\+\(\)\.]/g,''); }
+function normalizeCompany(c) { return (c||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+
+function findDuplicate(newContact, existingContacts) {
+  const ph = normalizePhone(newContact.phone);
+  const co = normalizeCompany(newContact.company);
+  return existingContacts.find(c => {
+    const phoneMatch = ph.length > 4 && ph === normalizePhone(c.phone);
+    const companyMatch = co.length > 2 && co === normalizeCompany(c.company);
+    return phoneMatch || companyMatch;
+  }) || null;
+}
+
 const FIELD_MAP_OPTIONS = [
   { value:'', label:'— Skip —' },
   { value:'company', label:'Company Name' },
@@ -32,12 +46,14 @@ function autoDetect(header) {
   return '';
 }
 
-function ImportLeads({ onImport }) {
+function ImportLeads({ onImport, existingContacts = [] }) {
   const [step, setStep] = useState4('upload'); // upload | map | preview | done
   const [rawData, setRawData] = useState4(null);
   const [headers, setHeaders] = useState4([]);
   const [mapping, setMapping] = useState4({});
   const [preview, setPreview] = useState4([]);
+  const [duplicateRows, setDuplicateRows] = useState4({}); // index -> existing contact
+  const [skipDuplicates, setSkipDuplicates] = useState4(true);
   const [importing, setImporting] = useState4(false);
   const [importCount, setImportCount] = useState4(0);
   const [dragOver, setDragOver] = useState4(false);
@@ -89,6 +105,18 @@ function ImportLeads({ onImport }) {
       Object.entries(mapping).forEach(([colIdx, field]) => { if(field) obj[field] = row[colIdx]||''; });
       return obj;
     });
+    // Detect duplicates across ALL rows (not just preview)
+    const allRows = (rawData||[]).map((row, i) => {
+      const obj = {};
+      Object.entries(mapping).forEach(([colIdx, field]) => { if(field) obj[field] = row[colIdx]||''; });
+      return { idx: i, ...obj };
+    });
+    const dupMap = {};
+    allRows.forEach(({ idx, ...row }) => {
+      const dup = findDuplicate(row, existingContacts);
+      if (dup) dupMap[idx] = dup;
+    });
+    setDuplicateRows(dupMap);
     setPreview(rows);
     setStep('preview');
   };
@@ -96,6 +124,8 @@ function ImportLeads({ onImport }) {
   const doImport = () => {
     setImporting(true);
     const newContacts = (rawData||[]).map((row,i) => {
+      // Skip duplicates if user chose to
+      if (skipDuplicates && duplicateRows[i]) return null;
       const obj = {};
       Object.entries(mapping).forEach(([colIdx, field]) => { if(field) obj[field] = row[colIdx]||''; });
       return {
@@ -115,7 +145,7 @@ function ImportLeads({ onImport }) {
         callLog: [],
         assignedTo: 'u1',
       };
-    }).filter(c => c.company !== 'Unknown Company' || c.phone);
+    }).filter(c => c && (c.company !== 'Unknown Company' || c.phone));
     setTimeout(() => {
       onImport(newContacts);
       setImportCount(newContacts.length);
@@ -216,33 +246,60 @@ function ImportLeads({ onImport }) {
       {/* STEP 3: Preview */}
       {step==='preview' && (
         <div>
+          {/* Duplicate warning banner */}
+          {Object.keys(duplicateRows).length > 0 && (
+            <div style={{ background:'#FFF7ED', border:'1px solid #FED7AA', borderRadius:10, padding:'12px 16px', marginBottom:16, display:'flex', alignItems:'flex-start', gap:10 }}>
+              <Icon path="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" size={16} color='#C2410C' />
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'#C2410C' }}>{Object.keys(duplicateRows).length} duplicate{Object.keys(duplicateRows).length>1?'s':''} detected</div>
+                <div style={{ fontSize:12, color:'#92400E', marginTop:2 }}>These leads already exist in your CRM (matched by phone or company name).</div>
+                <div style={{ marginTop:10, display:'flex', gap:8 }}>
+                  <button onClick={()=>setSkipDuplicates(true)} style={{ padding:'5px 12px', borderRadius:7, border:'none', background:skipDuplicates?'#C2410C':'#FED7AA', color:skipDuplicates?'#fff':'#92400E', fontSize:12, fontWeight:700, cursor:'pointer' }}>Skip duplicates ({Object.keys(duplicateRows).length})</button>
+                  <button onClick={()=>setSkipDuplicates(false)} style={{ padding:'5px 12px', borderRadius:7, border:'none', background:!skipDuplicates?'#374151':'#E5E7EB', color:!skipDuplicates?'#fff':'#6B7280', fontSize:12, fontWeight:700, cursor:'pointer' }}>Import anyway</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div style={{ background:'#fff', border:'1px solid #E9EBF0', borderRadius:12, overflow:'hidden', marginBottom:20 }}>
             <div style={{ padding:'14px 20px', borderBottom:'1px solid #F3F4F6', background:'#F8F9FC', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <div>
                 <div style={{ fontWeight:700, fontSize:14, color:'#1A1D2E' }}>Import Preview</div>
                 <div style={{ fontSize:12, color:'#6B7280', marginTop:2 }}>Showing first 5 of {rawData?.length} rows — all will be added as <strong>New Lead</strong></div>
               </div>
-              <span style={{ background:'#ECFDF5', color:'#065F46', fontSize:12, fontWeight:700, borderRadius:99, padding:'3px 10px' }}>{rawData?.length} leads</span>
+              <span style={{ background:'#ECFDF5', color:'#065F46', fontSize:12, fontWeight:700, borderRadius:99, padding:'3px 10px' }}>
+                {skipDuplicates ? rawData?.length - Object.keys(duplicateRows).length : rawData?.length} leads
+              </span>
             </div>
             <div style={{ overflowX:'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', minWidth:500 }}>
                 <thead>
                   <tr style={{ borderBottom:'1px solid #F3F4F6' }}>
-                    {['Company','Contact','Phone','Email','Notes'].map(h=>(
+                    {['','Company','Contact','Phone','Email','Notes'].map(h=>(
                       <th key={h} style={{ padding:'9px 14px', fontSize:11, fontWeight:700, color:'#9CA3AF', textAlign:'left', textTransform:'uppercase', letterSpacing:'0.04em', whiteSpace:'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {preview.map((row,i)=>(
-                    <tr key={i} style={{ borderBottom:'1px solid #F9FAFB' }}>
-                      <td style={{ padding:'9px 14px', fontSize:12, fontWeight:600, color:'#1A1D2E' }}>{row.company||'—'}</td>
-                      <td style={{ padding:'9px 14px', fontSize:12, color:'#374151' }}>{row.contactPerson||'—'}</td>
-                      <td style={{ padding:'9px 14px', fontSize:12, color:'#6B7280', fontFamily:'monospace' }}>{row.phone||'—'}</td>
-                      <td style={{ padding:'9px 14px', fontSize:12, color:'#6B7280' }}>{row.email||'—'}</td>
-                      <td style={{ padding:'9px 14px', fontSize:12, color:'#9CA3AF', maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{row.notes||'—'}</td>
-                    </tr>
-                  ))}
+                  {preview.map((row,i)=>{
+                    const dup = duplicateRows[i];
+                    const skipped = dup && skipDuplicates;
+                    return (
+                      <tr key={i} style={{ borderBottom:'1px solid #F9FAFB', opacity: skipped ? 0.45 : 1, background: dup ? '#FFFBEB' : 'transparent' }}>
+                        <td style={{ padding:'9px 14px', width:24 }}>
+                          {dup && <span title={`Duplicate of: ${dup.company}`} style={{ fontSize:13 }}>⚠️</span>}
+                        </td>
+                        <td style={{ padding:'9px 14px', fontSize:12, fontWeight:600, color:'#1A1D2E' }}>
+                          {row.company||'—'}
+                          {dup && <div style={{ fontSize:10, color:'#D97706', marginTop:2 }}>Exists as "{dup.company}"</div>}
+                        </td>
+                        <td style={{ padding:'9px 14px', fontSize:12, color:'#374151' }}>{row.contactPerson||'—'}</td>
+                        <td style={{ padding:'9px 14px', fontSize:12, color:'#6B7280', fontFamily:'monospace' }}>{row.phone||'—'}</td>
+                        <td style={{ padding:'9px 14px', fontSize:12, color:'#6B7280' }}>{row.email||'—'}</td>
+                        <td style={{ padding:'9px 14px', fontSize:12, color:'#9CA3AF', maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{row.notes||'—'}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -250,7 +307,7 @@ function ImportLeads({ onImport }) {
           <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
             <button onClick={()=>setStep('map')} style={{ padding:'8px 18px', border:'1.5px solid #E5E7EB', borderRadius:8, background:'#fff', color:'#374151', fontSize:13, fontWeight:600, cursor:'pointer' }}>← Back</button>
             <button onClick={doImport} disabled={importing} style={{ padding:'8px 24px', border:'none', borderRadius:8, background:importing?'#6B7280':GOLD, color:NAVY, fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:8 }}>
-              {importing ? '⏳ Importing…' : `✓ Import ${rawData?.length} Leads`}
+              {importing ? '⏳ Importing…' : `✓ Import ${skipDuplicates ? (rawData?.length - Object.keys(duplicateRows).length) : rawData?.length} Leads`}
             </button>
           </div>
         </div>
