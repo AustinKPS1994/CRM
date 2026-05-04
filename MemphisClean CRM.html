@@ -11,6 +11,21 @@
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyC0WVIUgIjDUVAuayTvKBBefikh9UMjl-U",
+    authDomain: "memphisclean-crm.firebaseapp.com",
+    projectId: "memphisclean-crm",
+    storageBucket: "memphisclean-crm.firebasestorage.app",
+    messagingSenderId: "231258025299",
+    appId: "1:231258025299:web:ae265eda467969e23305a6"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+</script>
 <script src="crm-data.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -21,6 +36,7 @@
   ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 99px; }
   ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
   input:focus, select:focus, textarea:focus { border-color: #2B3990 !important; box-shadow: 0 0 0 3px rgba(43,57,144,0.12); }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -37,24 +53,10 @@
 
 <script type="text/babel">
 
-const { useState, useEffect } = React;
+const { useState, useEffect, useRef } = React;
 
-const STORAGE_KEY = 'memphisclean_crm_v1';
 const AUTH_KEY = 'memphisclean_crm_auth';
-
-function loadContacts() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // Clear any old pre-populated sample data (ids starting with 'c' followed by single digit)
-      const hasSampleData = parsed.some(c => /^c\d$/.test(c.id));
-      if (hasSampleData) { localStorage.removeItem(STORAGE_KEY); return []; }
-      return parsed;
-    }
-  } catch (e) {}
-  return [];
-}
+const OLD_STORAGE_KEY = 'memphisclean_crm_v1'; // for one-time migration only
 
 function loadSession() {
   try {
@@ -67,57 +69,115 @@ function loadSession() {
 function App() {
   const [currentUser, setCurrentUser] = useState(loadSession);
   const [view, setView] = useState('queue');
-  const [contacts, setContacts] = useState(loadContacts);
+  const [contacts, setContactsState] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [activeContact, setActiveContact] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const migrated = useRef(false);
 
-  // Persist contacts
+  // Real-time Firestore listener — keeps both devices in sync automatically
   useEffect(() => {
-    try {localStorage.setItem(STORAGE_KEY, JSON.stringify(contacts));} catch (e) {}
-  }, [contacts]);
+    const unsub = db.collection('contacts').onSnapshot((snap) => {
+      const loaded = snap.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      setContactsState(loaded);
+      setLoading(false);
+    }, (err) => {
+      console.error('Firestore error:', err);
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  // One-time migration: if contacts exist in localStorage, push them to Firestore
+  useEffect(() => {
+    if (migrated.current) return;
+    migrated.current = true;
+    try {
+      const saved = localStorage.getItem(OLD_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const valid = (parsed || []).filter(c => c.id && !/^c\d$/.test(c.id));
+        if (valid.length > 0) {
+          const batch = db.batch();
+          valid.forEach(c => batch.set(db.collection('contacts').doc(c.id), c));
+          batch.commit().then(() => localStorage.removeItem(OLD_STORAGE_KEY));
+        } else {
+          localStorage.removeItem(OLD_STORAGE_KEY);
+        }
+      }
+    } catch (e) {}
+  }, []);
 
   const handleLogin = (user) => {
     setCurrentUser(user);
-    try {localStorage.setItem(AUTH_KEY, JSON.stringify(user));} catch (e) {}
-    // Default view per role
+    try { localStorage.setItem(AUTH_KEY, JSON.stringify(user)); } catch (e) {}
     setView(user.role === 'admin' ? 'dashboard' : 'queue');
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
-    try {localStorage.removeItem(AUTH_KEY);} catch (e) {}
+    try { localStorage.removeItem(AUTH_KEY); } catch (e) {}
     setActiveContact(null);
   };
 
-  // Scope contacts to current user if rep
-  const scopedContacts = currentUser && currentUser.role === 'rep' ?
-  contacts.filter((c) => c.assignedTo === currentUser.id) :
-  contacts;
+  // Firestore-aware setContacts — used by Pipeline/CallQueue for stage moves etc.
+  const setContacts = (updaterOrArray) => {
+    const newContacts = typeof updaterOrArray === 'function'
+      ? updaterOrArray(contacts)
+      : updaterOrArray;
+    const batch = db.batch();
+    newContacts.forEach(newC => {
+      const old = contacts.find(c => c.id === newC.id);
+      if (!old || JSON.stringify(old) !== JSON.stringify(newC)) {
+        batch.set(db.collection('contacts').doc(newC.id), newC);
+      }
+    });
+    batch.commit().catch(console.error);
+    // Local state updates via onSnapshot automatically
+  };
+
+  // Scope contacts to current rep if role is rep
+  const scopedContacts = currentUser && currentUser.role === 'rep'
+    ? contacts.filter(c => c.assignedTo === currentUser.id)
+    : contacts;
 
   const openContact = (c) => {
-    const fresh = contacts.find((x) => x.id === c.id) || c;
+    const fresh = contacts.find(x => x.id === c.id) || c;
     setActiveContact(fresh);
   };
 
   const updateContact = (updated) => {
-    setContacts((prev) => prev.map((c) => c.id === updated.id ? updated : c));
+    db.collection('contacts').doc(updated.id).set(updated).catch(console.error);
     setActiveContact(updated);
   };
 
   const addContact = (newContact) => {
-    // Assign to current rep, or u1 if admin
     const withAssign = { ...newContact, assignedTo: currentUser?.role === 'rep' ? currentUser.id : newContact.assignedTo || 'u1' };
-    setContacts((prev) => [withAssign, ...prev]);
+    db.collection('contacts').doc(withAssign.id).set(withAssign).catch(console.error);
     setShowAddModal(false);
   };
 
   const importContacts = (newContacts) => {
-    setContacts((prev) => [...newContacts, ...prev]);
+    const batch = db.batch();
+    newContacts.forEach(c => batch.set(db.collection('contacts').doc(c.id), c));
+    batch.commit().catch(console.error);
   };
 
   // Show login screen if not authenticated
   if (!currentUser) {
     return <LoginScreen onLogin={handleLogin} />;
+  }
+
+  // Loading spinner while Firestore fetches data
+  if (loading) {
+    return (
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'#F8F9FC' }}>
+        <div style={{ textAlign:'center' }}>
+          <div style={{ width:40, height:40, border:'3px solid #2B3990', borderTopColor:'transparent', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto 14px' }}></div>
+          <div style={{ color:'#6B7280', fontSize:14, fontWeight:500 }}>Loading CRM…</div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -126,47 +186,45 @@ function App() {
 
       <main style={{ flex: 1, overflowY: 'auto', background: '#F8F9FC', fontSize: "24px" }}>
         {view === 'dashboard' &&
-        <Dashboard contacts={scopedContacts} onOpenContact={openContact} />
+          <Dashboard contacts={scopedContacts} onOpenContact={openContact} />
         }
         {view === 'queue' &&
-        <CallQueue contacts={scopedContacts} setContacts={setContacts} onOpenContact={openContact} />
+          <CallQueue contacts={scopedContacts} setContacts={setContacts} onOpenContact={openContact} />
         }
         {view === 'pipeline' &&
-        <Pipeline contacts={scopedContacts} setContacts={setContacts} onOpenContact={openContact} />
+          <Pipeline contacts={scopedContacts} setContacts={setContacts} onOpenContact={openContact} />
         }
         {view === 'contacts' &&
-        <AllContacts contacts={scopedContacts} onOpenContact={openContact} onAddContact={() => setShowAddModal(true)} />
+          <AllContacts contacts={scopedContacts} onOpenContact={openContact} onAddContact={() => setShowAddModal(true)} />
         }
         {view === 'import' &&
-        <ImportLeads onImport={(newContacts) => {importContacts(newContacts);setTimeout(() => setView('queue'), 1200);}} />
+          <ImportLeads onImport={(newContacts) => { importContacts(newContacts); setTimeout(() => setView('queue'), 1200); }} />
         }
         {view === 'calendar' &&
-        <CalendarView contacts={scopedContacts} onOpenContact={openContact} />
+          <CalendarView contacts={scopedContacts} onOpenContact={openContact} />
         }
         {view === 'manager' &&
-        <ManagerDashboard contacts={contacts} />
+          <ManagerDashboard contacts={contacts} />
         }
         {view === 'settings' &&
-        <RepManager />
+          <RepManager />
         }
       </main>
 
       {activeContact &&
-      <ContactDetail
-        contact={activeContact}
-        onClose={() => setActiveContact(null)}
-        onUpdate={updateContact} />
-
+        <ContactDetail
+          contact={activeContact}
+          onClose={() => setActiveContact(null)}
+          onUpdate={updateContact} />
       }
 
       {showAddModal &&
-      <AddContactModal
-        onSave={addContact}
-        onClose={() => setShowAddModal(false)} />
-
+        <AddContactModal
+          onSave={addContact}
+          onClose={() => setShowAddModal(false)} />
       }
-    </div>);
-
+    </div>
+  );
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
