@@ -257,9 +257,10 @@ function CallQueue({ contacts, setContacts, onOpenContact }) {
 }
 
 // ── ALL CONTACTS ───────────────────────────────────────────────────
-function AllContacts({ contacts, onOpenContact, onAddContact }) {
+function AllContacts({ contacts, onOpenContact, onAddContact, onDeleteContact }) {
   const [search, setSearch] = useState2('');
   const [stageFilter, setStageFilter] = useState2('All');
+  const [showDupModal, setShowDupModal] = useState2(false);
   const stages = ['All', 'New Lead', 'Called', 'Interested', 'Appointment Set', 'Quoted', 'Won', 'Lost'];
   const filtered = contacts.filter((c) => {
     const q = search.toLowerCase();
@@ -272,9 +273,14 @@ function AllContacts({ contacts, onOpenContact, onAddContact }) {
     <div style={{ padding: '28px 32px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1A1D2E', margin: 0 }}>All Contacts <span style={{ color: '#9CA3AF', fontWeight: 400 }}>({contacts.length})</span></h1>
-        <button onClick={onAddContact} style={{ padding: '8px 16px', background: NAVY, color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add Contact
-        </button>
+        <div style={{ display:'flex', gap:8 }}>
+          <button onClick={() => setShowDupModal(true)} style={{ padding: '8px 14px', background: '#fff', color: '#374151', border: '1.5px solid #E5E7EB', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon path="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" size={14} color='#D97706' /> Find Duplicates
+          </button>
+          <button onClick={onAddContact} style={{ padding: '8px 16px', background: NAVY, color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add Contact
+          </button>
+        </div>
       </div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search company, name, phone…" style={{ flex: 1, minWidth: 200, padding: '8px 12px', border: '1.5px solid #E5E7EB', borderRadius: 8, fontSize: 13, outline: 'none' }} />
@@ -311,8 +317,118 @@ function AllContacts({ contacts, onOpenContact, onAddContact }) {
         </table>
         {filtered.length === 0 && <div style={{ padding: 32, textAlign: 'center', color: '#9CA3AF' }}>No contacts match your search.</div>}
       </div>
+      {showDupModal && (
+        <FindDuplicatesModal
+          contacts={contacts}
+          onDelete={onDeleteContact}
+          onClose={() => setShowDupModal(false)} />
+      )}
     </div>);
 
 }
 
-Object.assign(window, { Dashboard, Pipeline, CallQueue, AllContacts });
+// ── FIND DUPLICATES MODAL ──────────────────────────────────────────
+function FindDuplicatesModal({ contacts, onDelete, onClose }) {
+  const [resolved, setResolved] = useState2(new Set());
+
+  // Group contacts that share a normalised phone or company name
+  const normPhone = p => (p||'').replace(/[\s\-\+\(\)\.]/g,'');
+  const normCo    = c => (c||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+
+  const groups = useMemo(() => {
+    const seen = new Map(); // key -> [contacts]
+    contacts.forEach(c => {
+      const keys = [];
+      if (normPhone(c.phone).length > 4) keys.push('ph:' + normPhone(c.phone));
+      if (normCo(c.company).length > 2)  keys.push('co:' + normCo(c.company));
+      keys.forEach(k => {
+        if (!seen.has(k)) seen.set(k, []);
+        seen.get(k).push(c);
+      });
+    });
+    // Collect unique groups of 2+ contacts, deduplicate groups
+    const groupMap = new Map();
+    seen.forEach((members) => {
+      if (members.length < 2) return;
+      const key = [...members].map(m=>m.id).sort().join('|');
+      groupMap.set(key, members);
+    });
+    return [...groupMap.values()];
+  }, [contacts]);
+
+  const pending = groups.filter(g => !g.every(c => resolved.has(c.id)));
+
+  const handleDelete = (contact) => {
+    onDelete(contact);
+    setResolved(prev => new Set([...prev, contact.id]));
+  };
+
+  const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'2-digit' }) : '—';
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center' }} onClick={onClose}>
+      <div style={{ background:'#fff', borderRadius:16, width:680, maxHeight:'80vh', display:'flex', flexDirection:'column', boxShadow:'0 20px 60px rgba(0,0,0,0.25)' }} onClick={e=>e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding:'22px 28px', borderBottom:'1px solid #F3F4F6', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
+          <div>
+            <h2 style={{ margin:0, fontSize:17, fontWeight:700, color:'#1A1D2E' }}>Find Duplicates</h2>
+            <p style={{ margin:'3px 0 0', fontSize:12, color:'#6B7280' }}>
+              {pending.length === 0 ? 'No duplicates found — your contacts are clean ✓' : `${pending.length} duplicate group${pending.length>1?'s':''} found`}
+            </p>
+          </div>
+          <button onClick={onClose} style={{ border:'none', background:'#F3F4F6', borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:16, color:'#6B7280' }}>×</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY:'auto', padding:'20px 28px', flex:1 }}>
+          {pending.length === 0 && (
+            <div style={{ textAlign:'center', padding:'40px 0' }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>✓</div>
+              <div style={{ fontSize:14, color:'#6B7280' }}>No duplicates detected across {contacts.length} contacts.</div>
+            </div>
+          )}
+          {pending.map((group, gi) => {
+            const members = group.filter(c => !resolved.has(c.id));
+            if (members.length < 2) return null;
+            return (
+              <div key={gi} style={{ marginBottom:20, border:'1px solid #FED7AA', borderRadius:12, overflow:'hidden' }}>
+                <div style={{ background:'#FFF7ED', padding:'10px 16px', fontSize:11, fontWeight:700, color:'#C2410C', textTransform:'uppercase', letterSpacing:'0.06em' }}>
+                  Duplicate group · {members.length} contacts
+                </div>
+                {members.map((c, ci) => (
+                  <div key={c.id} style={{ padding:'14px 16px', borderTop: ci>0 ? '1px solid #FEF3C7' : 'none', display:'flex', gap:14, alignItems:'flex-start', background:'#fff' }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:700, fontSize:14, color:'#1A1D2E' }}>{c.company}</div>
+                      <div style={{ fontSize:12, color:'#6B7280', marginTop:2 }}>{c.contactPerson}{c.title ? ` · ${c.title}` : ''}</div>
+                      <div style={{ display:'flex', gap:12, marginTop:6, flexWrap:'wrap' }}>
+                        <span style={{ fontSize:11, color:'#9CA3AF' }}>📞 {c.phone||'—'}</span>
+                        <span style={{ fontSize:11, color:'#9CA3AF' }}>📧 {c.email||'—'}</span>
+                        <span style={{ fontSize:11, color:'#9CA3AF' }}>Last call: {fmtDate(c.lastCallDate)}</span>
+                        <span style={{ fontSize:11, color:'#9CA3AF' }}>{c.callLog?.length||0} call{c.callLog?.length!==1?'s':''} logged</span>
+                      </div>
+                    </div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:6, flexShrink:0, alignItems:'flex-end' }}>
+                      <StageBadge stage={c.stage} />
+                      <button
+                        onClick={() => handleDelete(c)}
+                        style={{ padding:'5px 12px', border:'1.5px solid #FEE2E2', borderRadius:7, background:'#FFF5F5', color:'#DC2626', fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                        Remove this one
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ padding:'16px 28px', borderTop:'1px solid #F3F4F6', flexShrink:0, display:'flex', justifyContent:'flex-end' }}>
+          <button onClick={onClose} style={{ padding:'8px 20px', border:'none', borderRadius:8, background:NAVY, color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer' }}>Done</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { Dashboard, Pipeline, CallQueue, AllContacts, FindDuplicatesModal });
