@@ -198,7 +198,7 @@ function App() {
           <AllContacts contacts={scopedContacts} onOpenContact={openContact} onAddContact={() => setShowAddModal(true)} />
         }
         {view === 'import' &&
-          <ImportLeads onImport={(newContacts) => { importContacts(newContacts); setTimeout(() => setView('queue'), 1200); }} />
+          <ImportLeads onImport={(newContacts) => { importContacts(newContacts); setTimeout(() => setView('queue'), 1200); }} existingContacts={contacts} />
         }
         {view === 'calendar' &&
           <CalendarView contacts={scopedContacts} onOpenContact={openContact} />
@@ -221,7 +221,8 @@ function App() {
       {showAddModal &&
         <AddContactModal
           onSave={addContact}
-          onClose={() => setShowAddModal(false)} />
+          onClose={() => setShowAddModal(false)}
+          existingContacts={contacts} />
       }
     </div>
   );

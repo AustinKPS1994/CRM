@@ -83,18 +83,33 @@ function CallLogModal({ contact, onSave, onClose }) {
   );
 }
 
-function AddContactModal({ onSave, onClose, editContact }) {
+function normalizePhone3(p) { return (p||'').replace(/[\s\-\+\(\)\.]/g,''); }
+function normalizeCompany3(c) { return (c||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+
+function AddContactModal({ onSave, onClose, editContact, existingContacts = [] }) {
   const blank = { company:'', contactPerson:'', title:'', phone:'', email:'', stage:'New Lead', services:[], quoteAmount:'', notes:'', nextAction:'', nextActionDate:'' };
   const [form, setForm] = useState3(editContact ? {
     ...editContact, quoteAmount: editContact.quoteAmount || '',
     nextActionDate: editContact.nextActionDate ? new Date(editContact.nextActionDate).toISOString().slice(0,16) : '',
     services: editContact.services || [],
   } : blank);
-  const set = (k,v) => setForm(p=>({...p,[k]:v}));
+  const [dupWarning, setDupWarning] = useState3(null);
+  const [forceAdd, setForceAdd] = useState3(false);
+  const set = (k,v) => { setForm(p=>({...p,[k]:v})); setDupWarning(null); setForceAdd(false); };
   const toggleService = s => set('services', form.services.includes(s) ? form.services.filter(x=>x!==s) : [...form.services,s]);
 
   const handleSave = () => {
     if (!form.company || !form.contactPerson || !form.phone) return;
+    // Check for duplicates unless editing or user confirmed
+    if (!editContact && !forceAdd) {
+      const others = existingContacts.filter(c => c.id !== editContact?.id);
+      const dup = others.find(c => {
+        const phoneMatch = normalizePhone3(form.phone).length > 4 && normalizePhone3(form.phone) === normalizePhone3(c.phone);
+        const companyMatch = normalizeCompany3(form.company).length > 2 && normalizeCompany3(form.company) === normalizeCompany3(c.company);
+        return phoneMatch || companyMatch;
+      });
+      if (dup) { setDupWarning(dup); return; }
+    }
     onSave({
       ...form,
       id: editContact ? editContact.id : 'c' + Date.now(),
@@ -113,6 +128,19 @@ function AddContactModal({ onSave, onClose, editContact }) {
           <h2 style={{ margin:0, fontSize:17, fontWeight:700, color:'#1A1D2E' }}>{editContact?'Edit Contact':'Add New Contact'}</h2>
           <button onClick={onClose} style={{ border:'none', background:'#F3F4F6', borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:16, color:'#6B7280' }}>×</button>
         </div>
+
+        {/* Duplicate warning */}
+        {dupWarning && (
+          <div style={{ background:'#FFF7ED', border:'1px solid #FED7AA', borderRadius:10, padding:'12px 14px', marginBottom:16 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:'#C2410C', marginBottom:4 }}>⚠️ Possible duplicate</div>
+            <div style={{ fontSize:12, color:'#92400E' }}>A contact already exists with a matching phone or company name: <strong>{dupWarning.company}</strong> ({dupWarning.contactPerson})</div>
+            <div style={{ display:'flex', gap:8, marginTop:10 }}>
+              <button onClick={()=>{ setForceAdd(true); setDupWarning(null); setTimeout(handleSave,0); }} style={{ padding:'5px 12px', borderRadius:7, border:'none', background:'#C2410C', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer' }}>Add anyway</button>
+              <button onClick={()=>setDupWarning(null)} style={{ padding:'5px 12px', borderRadius:7, border:'1.5px solid #FED7AA', background:'transparent', color:'#92400E', fontSize:12, fontWeight:600, cursor:'pointer' }}>Cancel</button>
+            </div>
+          </div>
+        )}
+
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
             <div style={{ gridColumn:'1/-1' }}>
