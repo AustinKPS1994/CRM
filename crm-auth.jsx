@@ -16,6 +16,12 @@ function loadReps() {
 
 function saveReps(reps) {
   try { localStorage.setItem(REPS_STORAGE_KEY, JSON.stringify(reps)); } catch(e) {}
+  // Sync to Firestore so all devices see the same rep list
+  if (typeof db !== 'undefined') {
+    const batch = db.batch();
+    reps.forEach(r => batch.set(db.collection('reps').doc(r.id), r));
+    batch.commit().catch(console.error);
+  }
 }
 
 // ── PIN PAD ───────────────────────────────────────────────────────
@@ -93,6 +99,18 @@ function LoginScreen({ onLogin }) {
     window.addEventListener('storage', handler);
     window.addEventListener('reps-updated', handler);
     return () => { window.removeEventListener('storage', handler); window.removeEventListener('reps-updated', handler); };
+  }, []);
+
+  // Load latest reps from Firestore so all devices see the same list
+  useEffect8(() => {
+    if (typeof db === 'undefined') return;
+    db.collection('reps').get().then(snap => {
+      if (!snap.empty) {
+        const firestoreReps = snap.docs.map(doc => doc.data());
+        setReps(firestoreReps);
+        try { localStorage.setItem(REPS_STORAGE_KEY, JSON.stringify(firestoreReps)); } catch(e) {}
+      }
+    }).catch(console.error);
   }, []);
 
   const handleRepSelect = (rep) => {
