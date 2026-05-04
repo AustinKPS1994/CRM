@@ -7,6 +7,21 @@ function loadVoiceSettings() {
   try { return JSON.parse(localStorage.getItem(VOICE_SETTINGS_KEY)) || {}; } catch { return {}; }
 }
 
+// Fetch latest settings from Firestore and cache locally
+async function fetchVoiceSettings() {
+  try {
+    if (typeof db !== 'undefined') {
+      const doc = await db.collection('settings').doc('twilio').get();
+      if (doc.exists) {
+        const data = doc.data();
+        localStorage.setItem(VOICE_SETTINGS_KEY, JSON.stringify(data));
+        return data;
+      }
+    }
+  } catch(e) {}
+  return loadVoiceSettings();
+}
+
 // ─── Settings Modal ──────────────────────────────────────────────────────────
 function TwilioVoiceSettings({ onClose }) {
   const saved = loadVoiceSettings();
@@ -15,8 +30,21 @@ function TwilioVoiceSettings({ onClose }) {
   const [ok, setOk] = useState9(false);
   const [showCode, setShowCode] = useState9(false);
 
+  // Load latest from Firestore on open
+  useEffect9(() => {
+    fetchVoiceSettings().then(s => {
+      if (s.tokenUrl)   setTokenUrl(s.tokenUrl);
+      if (s.fromNumber) setFromNumber(s.fromNumber);
+    });
+  }, []);
+
   const handleSave = () => {
-    localStorage.setItem(VOICE_SETTINGS_KEY, JSON.stringify({ tokenUrl: tokenUrl.trim(), fromNumber: fromNumber.trim() }));
+    const settings = { tokenUrl: tokenUrl.trim(), fromNumber: fromNumber.trim() };
+    // Save to localStorage AND Firestore so all devices get it
+    localStorage.setItem(VOICE_SETTINGS_KEY, JSON.stringify(settings));
+    if (typeof db !== 'undefined') {
+      db.collection('settings').doc('twilio').set(settings).catch(console.error);
+    }
     setOk(true);
     setTimeout(onClose, 700);
   };
@@ -108,14 +136,11 @@ function TwilioDialer({ contact, onClose, onCallEnded }) {
   const deviceRef  = useRef9(null);
   const callRef    = useRef9(null);
   const timerRef   = useRef9(null);
-  const settings   = loadVoiceSettings();
 
   // Format seconds → m:ss
   const fmtDuration = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 
   useEffect9(() => {
-    if (!settings.tokenUrl) { setStatus('error'); setError('No Token URL configured. Click ⚙ Twilio to configure.'); return; }
-
     let mounted = true;
 
     const ensureSDK = () => new Promise((resolve) => {
@@ -140,6 +165,11 @@ function TwilioDialer({ contact, onClose, onCallEnded }) {
 
     (async () => {
       try {
+        // Fetch settings from Firestore first (falls back to localStorage)
+        const settings = await fetchVoiceSettings();
+        if (!mounted) return;
+        if (!settings.tokenUrl) { setStatus('error'); setError('No Token URL configured. Click ⚙ Twilio to configure.'); return; }
+
         const sdkReady = await ensureSDK();
         if (!mounted) return;
         if (!sdkReady) { setStatus('error'); setError('Twilio Voice SDK failed to load. Please reload the page and try again.'); return; }
