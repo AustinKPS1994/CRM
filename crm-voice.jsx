@@ -458,8 +458,8 @@ const DIAL_KEYS = [
   { k:'*', sub:'' }, { k:'0', sub:'+' }, { k:'#', sub:'' },
 ];
 
-function TwilioManualDialer({ onClose, contactName, currentUser }) {
-  const [dialNumber,   setDialNumber]   = useState9('');
+function TwilioManualDialer({ onClose, contactName, defaultNumber, currentUser }) {
+  const [dialNumber,   setDialNumber]   = useState9(defaultNumber || '');
   const [status,       setStatus]       = useState9('idle'); // idle|init|connecting|connected|ended|error
   const [error,        setError]        = useState9('');
   const [seconds,      setSeconds]      = useState9(0);

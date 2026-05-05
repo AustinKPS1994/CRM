@@ -87,7 +87,7 @@ function normalizePhone3(p) { return (p||'').replace(/[\s\-\+\(\)\.]/g,''); }
 function normalizeCompany3(c) { return (c||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
 
 function AddContactModal({ onSave, onClose, editContact, existingContacts = [] }) {
-  const blank = { company:'', contactPerson:'', title:'', phone:'', email:'', stage:'New Lead', services:[], quoteAmount:'', notes:'', nextAction:'', nextActionDate:'' };
+  const blank = { company:'', contactPerson:'', title:'', phone:'', altPhone:'', email:'', stage:'New Lead', services:[], quoteAmount:'', notes:'', nextAction:'', nextActionDate:'' };
   const [form, setForm] = useState3(editContact ? {
     ...editContact, quoteAmount: editContact.quoteAmount || '',
     nextActionDate: editContact.nextActionDate ? new Date(editContact.nextActionDate).toISOString().slice(0,16) : '',
@@ -158,6 +158,10 @@ function AddContactModal({ onSave, onClose, editContact, existingContacts = [] }
             <div>
               <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>Phone *</label>
               <input value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="+27 11 000 0000" style={{ width:'100%', padding:'8px 10px', border:'1.5px solid #E5E7EB', borderRadius:8, fontSize:13, outline:'none', boxSizing:'border-box' }} />
+            </div>
+            <div>
+              <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>Alternate Phone</label>
+              <input value={form.altPhone||''} onChange={e=>set('altPhone',e.target.value)} placeholder="+27 82 000 0000" style={{ width:'100%', padding:'8px 10px', border:'1.5px solid #E5E7EB', borderRadius:8, fontSize:13, outline:'none', boxSizing:'border-box' }} />
             </div>
             <div>
               <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>Email</label>
@@ -265,8 +269,8 @@ function ContactDetail({ contact, onClose, onUpdate, onLogCall, currentUser }) {
               <Icon path="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" size={15} color={NAVY} />
               Call
             </button>
-            <button onClick={()=>setShowManualDialer(true)} title="Dial an alternate number for this contact" style={{ padding:'9px 11px', background:'#fff', border:'1.5px solid #E5E7EB', borderRadius:8, color:'#374151', fontSize:13, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
-              <Icon path="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0a9 9 0 11-18 0 9 9 0 0118 0z" size={14} color='#374151' />
+            <button onClick={()=>setShowManualDialer(true)} title={contact.altPhone ? `Dial alternate: ${contact.altPhone}` : 'Dial an alternate number'} style={{ padding:'9px 11px', background: contact.altPhone ? '#FEF9EC' : '#fff', border:`1.5px solid ${contact.altPhone ? '#FDE68A' : '#E5E7EB'}`, borderRadius:8, color: contact.altPhone ? '#92680A' : '#374151', fontSize:13, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
+              <Icon path="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0a9 9 0 11-18 0 9 9 0 0118 0z" size={14} color={contact.altPhone ? '#92680A' : '#374151'} />
               Alt #
             </button>
             <button onClick={()=>setShowCallModal(true)} style={{ padding:'9px 12px', background:'#fff', border:'1.5px solid #E5E7EB', borderRadius:8, color:'#374151', fontSize:13, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
@@ -286,11 +290,13 @@ function ContactDetail({ contact, onClose, onUpdate, onLogCall, currentUser }) {
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
               {[
                 { label:'Phone', val:contact.phone, icon:'M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z' },
+                { label:'Alt Phone', val:contact.altPhone, icon:'M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z' },
                 { label:'Email', val:contact.email, icon:'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
               ].filter(r=>r.val).map(r => (
                 <div key={r.label} style={{ display:'flex', alignItems:'center', gap:10 }}>
-                  <Icon path={r.icon} size={14} color='#9CA3AF' />
+                  <Icon path={r.icon} size={14} color={r.label==='Alt Phone' ? '#F7B91E' : '#9CA3AF'} />
                   <span style={{ fontSize:13, color:'#374151' }}>{r.val}</span>
+                  {r.label==='Alt Phone' && <span style={{ fontSize:10, fontWeight:700, color:'#F7B91E', background:'#FEF9EC', border:'1px solid #FDE68A', borderRadius:4, padding:'1px 5px' }}>ALT</span>}
                 </div>
               ))}
               {contact.services?.length>0 && (
@@ -348,7 +354,7 @@ function ContactDetail({ contact, onClose, onUpdate, onLogCall, currentUser }) {
       </div>
 
       {showDialer && <TwilioDialer contact={contact} onClose={()=>setShowDialer(false)} onCallEnded={handleCallEnded} currentUser={currentUser} />}
-      {showManualDialer && <TwilioManualDialer onClose={()=>setShowManualDialer(false)} contactName={contact.company} currentUser={currentUser} />}
+      {showManualDialer && <TwilioManualDialer onClose={()=>setShowManualDialer(false)} contactName={contact.company} defaultNumber={contact.altPhone||''} currentUser={currentUser} />}
       {showCallModal && <CallLogModal contact={contact} prefilledDuration={dialerPrefilledDuration} onSave={handleLogSave} onClose={()=>{setShowCallModal(false);setDialerPrefilledDuration(null);}} />}
       {showEditModal && <AddContactModal editContact={contact} onSave={(updated)=>{onUpdate(updated);setShowEditModal(false);}} onClose={()=>setShowEditModal(false)} />}
       {showEmailModal && <EmailComposer contact={contact} onClose={()=>setShowEmailModal(false)} />}
