@@ -5,7 +5,72 @@ const detailServiceOptions = window.CRM_DATA.services;
 const detailOutcomeOptions = window.CRM_DATA.outcomes;
 const detailStages = window.CRM_DATA.stages;
 
-function CallLogModal({ contact, onSave, onClose, prefilledDuration }) {
+// ─── Recording Player ─────────────────────────────────────────────────────────
+function RecordingPlayer({ callSid }) {
+  const [state,    setState]    = useState3('idle'); // idle|loading|notfound|ready|error
+  const [audioUrl, setAudioUrl] = useState3(null);
+
+  const load = async () => {
+    setState('loading');
+    try {
+      const settings = await (typeof fetchVoiceSettings === 'function' ? fetchVoiceSettings() : Promise.resolve({}));
+      const baseUrl = settings.tokenUrl ? settings.tokenUrl.replace(/\/[^/]+$/, '') : null;
+      if (!baseUrl) { setState('error'); return; }
+
+      const recResp = await fetch(`${baseUrl}/recordings?callSid=${encodeURIComponent(callSid)}`);
+      if (!recResp.ok) { setState('error'); return; }
+      const recData = await recResp.json();
+      if (!recData.sid) { setState('notfound'); return; }
+
+      const playResp = await fetch(`${baseUrl}/play?sid=${encodeURIComponent(recData.sid)}`);
+      if (!playResp.ok) { setState('error'); return; }
+      const playData = await playResp.json();
+      if (!playData.audio) { setState('error'); return; }
+
+      const binary = atob(playData.audio);
+      const bytes  = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: 'audio/mpeg' });
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      setAudioUrl(URL.createObjectURL(blob));
+      setState('ready');
+    } catch { setState('error'); }
+  };
+
+  if (!callSid) return null;
+
+  if (state === 'idle') return (
+    <button onClick={load} style={{ marginTop:5, marginLeft:13, fontSize:11, color:NAVY, background:`${NAVY}12`, border:`1px solid ${NAVY}25`, borderRadius:6, padding:'3px 9px', cursor:'pointer', fontWeight:600, display:'inline-flex', alignItems:'center', gap:4 }}>
+      🎙 Play Recording
+    </button>
+  );
+  if (state === 'loading') return (
+    <span style={{ marginTop:5, marginLeft:13, fontSize:11, color:'#9CA3AF', display:'flex', alignItems:'center', gap:5 }}>
+      <span style={{ display:'inline-block', width:10, height:10, border:'1.5px solid #D1D5DB', borderTopColor:'#6B7280', borderRadius:'50%', animation:'spin 0.8s linear infinite' }}></span>
+      Loading recording…
+    </span>
+  );
+  if (state === 'notfound') return (
+    <div style={{ marginTop:5, marginLeft:13, fontSize:11, color:'#9CA3AF', display:'flex', alignItems:'center', gap:6 }}>
+      Recording still processing…
+      <button onClick={load} style={{ fontSize:11, color:NAVY, background:'none', border:'none', cursor:'pointer', textDecoration:'underline', padding:0, fontWeight:600 }}>Retry</button>
+    </div>
+  );
+  if (state === 'error') return (
+    <div style={{ marginTop:5, marginLeft:13, fontSize:11, color:'#F43F5E', display:'flex', alignItems:'center', gap:6 }}>
+      Could not load recording
+      <button onClick={()=>setState('idle')} style={{ fontSize:11, color:NAVY, background:'none', border:'none', cursor:'pointer', textDecoration:'underline', padding:0 }}>Try again</button>
+    </div>
+  );
+  if (state === 'ready' && audioUrl) return (
+    <div style={{ marginTop:5, marginLeft:13 }}>
+      <audio controls src={audioUrl} style={{ width:'100%', height:32 }} />
+    </div>
+  );
+  return null;
+}
+
+function CallLogModal({ contact, onSave, onClose, prefilledDuration, prefilledCallSid }) {
   const [form, setForm] = useState3({
     outcome: '', duration: prefilledDuration || '', notes: '', nextAction: '', nextActionDate: ''
   });
@@ -22,6 +87,7 @@ function CallLogModal({ contact, onSave, onClose, prefilledDuration }) {
       notes: form.notes,
       nextAction: form.nextAction,
       nextActionDate: form.nextActionDate ? new Date(form.nextActionDate).toISOString() : null,
+      callSid: prefilledCallSid || null,
     };
 
     // Determine new stage based on outcome
@@ -217,13 +283,15 @@ function ContactDetail({ contact, onClose, onUpdate, onLogCall, currentUser }) {
   const [showDialer,          setShowDialer]          = useState3(false);
   const [showManualDialer,    setShowManualDialer]    = useState3(false);
   const [dialerPrefilledDuration, setDialerPrefilledDuration] = useState3(null);
+  const [dialerCallSid,       setDialerCallSid]       = useState3(null);
   const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'short',year:'numeric'}) : '—';
   const fmtTime = iso => iso ? new Date(iso).toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'}) : '';
   const outcomeColor = o => o.includes('Interested')&&!o.includes('Not')?'#10B981':o.includes('Not')?'#F43F5E':o.includes('Callback')?'#F97316':'#6B7280';
   const fmtR = n => n>=1000?`R${(n/1000).toFixed(0)}k/mo`:`R${n}/mo`;
 
-  const handleCallEnded = (duration) => {
+  const handleCallEnded = (duration, callSid) => {
     setDialerPrefilledDuration(duration);
+    setDialerCallSid(callSid || null);
     setShowDialer(false);
     setShowCallModal(true);
   };
@@ -346,6 +414,7 @@ function ContactDetail({ contact, onClose, onUpdate, onLogCall, currentUser }) {
                   </div>
                   {l.notes && <p style={{ margin:'0 0 4px 13px', fontSize:12, color:'#6B7280', lineHeight:1.5 }}>{l.notes}</p>}
                   {l.nextAction && <div style={{ marginLeft:13, fontSize:11, color:'#F97316', fontWeight:600 }}>→ {l.nextAction}</div>}
+                  {l.callSid && <RecordingPlayer callSid={l.callSid} />}
                 </div>
               ))}
             </div>
@@ -355,7 +424,7 @@ function ContactDetail({ contact, onClose, onUpdate, onLogCall, currentUser }) {
 
       {showDialer && <TwilioDialer contact={contact} onClose={()=>setShowDialer(false)} onCallEnded={handleCallEnded} currentUser={currentUser} />}
       {showManualDialer && <TwilioManualDialer onClose={()=>setShowManualDialer(false)} contactName={contact.company} defaultNumber={contact.altPhone||''} currentUser={currentUser} />}
-      {showCallModal && <CallLogModal contact={contact} prefilledDuration={dialerPrefilledDuration} onSave={handleLogSave} onClose={()=>{setShowCallModal(false);setDialerPrefilledDuration(null);}} />}
+      {showCallModal && <CallLogModal contact={contact} prefilledDuration={dialerPrefilledDuration} prefilledCallSid={dialerCallSid} onSave={handleLogSave} onClose={()=>{setShowCallModal(false);setDialerPrefilledDuration(null);setDialerCallSid(null);}} />}
       {showEditModal && <AddContactModal editContact={contact} onSave={(updated)=>{onUpdate(updated);setShowEditModal(false);}} onClose={()=>setShowEditModal(false)} />}
       {showEmailModal && <EmailComposer contact={contact} onClose={()=>setShowEmailModal(false)} />}
     </div>

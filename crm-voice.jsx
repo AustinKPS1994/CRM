@@ -217,6 +217,7 @@ function TwilioDialer({ contact, onClose, onCallEnded, currentUser }) {
   const deviceRef  = useRef9(null);
   const callRef    = useRef9(null);
   const timerRef   = useRef9(null);
+  const callSidRef = useRef9(null);
 
   // Format seconds → m:ss
   const fmtDuration = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
@@ -279,6 +280,7 @@ function TwilioDialer({ contact, onClose, onCallEnded, currentUser }) {
 
         call.on('accept', () => {
           if (!mounted) return;
+          callSidRef.current = call.parameters?.CallSid || null;
           setStatus('connected');
           timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
         });
@@ -330,7 +332,7 @@ function TwilioDialer({ contact, onClose, onCallEnded, currentUser }) {
 
   const handleDone = () => {
     const duration = seconds > 0 ? fmtDuration(seconds) : null;
-    onCallEnded && onCallEnded(duration);
+    onCallEnded && onCallEnded(duration, callSidRef.current);
     onClose();
   };
 
