@@ -297,6 +297,15 @@ function ContactDetail({ contact, onClose, onUpdate, onLogCall, currentUser }) {
     setShowCallModal(true);
   };
 
+  const handleEmailSent = (emailRecord) => {
+    const updated = {
+      ...contact,
+      emailLog: [...(contact.emailLog || []), emailRecord],
+    };
+    onUpdate(updated);
+    setShowEmailModal(false);
+  };
+
   const handleLogSave = (entry, nextAction, nextActionDate, newStage) => {
     const updated = {
       ...contact,
@@ -420,6 +429,29 @@ function ContactDetail({ contact, onClose, onUpdate, onLogCall, currentUser }) {
               ))}
             </div>
           </div>
+          {/* Email History */}
+          {(contact.emailLog || []).length > 0 && (
+            <div style={{ background:'#fff', borderRadius:10, border:'1px solid #E9EBF0', overflow:'hidden' }}>
+              <div style={{ padding:'12px 16px', borderBottom:'1px solid #F3F4F6' }}>
+                <div style={{ fontSize:11, fontWeight:700, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:'0.06em' }}>Email History ({(contact.emailLog||[]).length})</div>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column' }}>
+                {[...(contact.emailLog||[])].reverse().map((e,i,arr) => (
+                  <div key={e.id} style={{ padding:'12px 16px', borderBottom:i<arr.length-1?'1px solid #F9FAFB':'none' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:4 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:6, flex:1, minWidth:0 }}>
+                        <Icon path="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" size={12} color='#10B981' />
+                        <span style={{ fontSize:12, fontWeight:700, color:'#374151', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{e.subject}</span>
+                      </div>
+                      <span style={{ fontSize:11, color:'#9CA3AF', flexShrink:0, marginLeft:8 }}>{fmtDate(e.date)}</span>
+                    </div>
+                    {e.preview && <p style={{ margin:'0 0 3px 18px', fontSize:12, color:'#6B7280', lineHeight:1.5 }}>{e.preview}{e.preview.length >= 120 ? '…' : ''}</p>}
+                    <div style={{ marginLeft:18, fontSize:11, color:'#9CA3AF' }}>Sent by {e.sentBy} → {e.to}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -427,7 +459,7 @@ function ContactDetail({ contact, onClose, onUpdate, onLogCall, currentUser }) {
       {showManualDialer && <TwilioManualDialer onClose={()=>setShowManualDialer(false)} contactName={contact.company} defaultNumber={contact.altPhone||''} currentUser={currentUser} />}
       {showCallModal && <CallLogModal contact={contact} prefilledDuration={dialerPrefilledDuration} prefilledCallSid={dialerCallSid} onSave={handleLogSave} onClose={()=>{setShowCallModal(false);setDialerPrefilledDuration(null);setDialerCallSid(null);}} />}
       {showEditModal && <AddContactModal editContact={contact} onSave={(updated)=>{onUpdate(updated);setShowEditModal(false);}} onClose={()=>setShowEditModal(false)} />}
-      {showEmailModal && <EmailComposer contact={contact} onClose={()=>setShowEmailModal(false)} />}
+      {showEmailModal && <EmailComposer contact={contact} currentUser={currentUser} onSent={handleEmailSent} onClose={()=>setShowEmailModal(false)} />}
     </div>
   );
 }

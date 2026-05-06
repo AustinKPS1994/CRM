@@ -303,6 +303,7 @@ function RepManager() {
   const [confirmDelete, setConfirmDelete] = useState8(null);
   const [changePinRep, setChangePinRep] = useState8(null);
   const [showAdminPin, setShowAdminPin] = useState8(false);
+  const [showEmailSettings, setShowEmailSettings] = useState8(false);
 
   const persist = (updated) => {
     setReps(updated);
@@ -334,6 +335,21 @@ function RepManager() {
         </div>
         <button onClick={() => { setEditRep(null); setShowAdd(true); }} style={{ padding:'8px 16px', background:NAVY, color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
           <span style={{ fontSize:18, lineHeight:1 }}>+</span> Add Rep
+        </button>
+      </div>
+
+      {/* Email Settings card */}
+      <div style={{ background:'#F0FDF4', border:'1px solid #BBF7D0', borderRadius:12, padding:'16px 20px', display:'flex', alignItems:'center', gap:16, marginBottom:12 }}>
+        <div style={{ width:46, height:46, borderRadius:'50%', background:'rgba(16,185,129,0.1)', border:'1.5px solid rgba(16,185,129,0.3)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+          <Icon path="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" size={20} color='#059669' />
+        </div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:14, fontWeight:700, color:'#1A1D2E' }}>Email Settings</div>
+          <div style={{ fontSize:12, color:'#9CA3AF', marginTop:2 }}>Configure EmailJS to send real emails from the CRM</div>
+        </div>
+        <button onClick={() => setShowEmailSettings(true)} style={{ padding:'6px 14px', border:'1.5px solid #A7F3D0', borderRadius:7, background:'#ECFDF5', color:'#065F46', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
+          <Icon path="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" size={12} color='#065F46' />
+          Configure
         </button>
       </div>
 
@@ -378,6 +394,9 @@ function RepManager() {
           <div style={{ textAlign:'center', padding:'40px 0', color:'#9CA3AF', fontSize:14, border:'2px dashed #E5E7EB', borderRadius:12 }}>No reps yet — add one above.</div>
         )}
       </div>
+
+      {/* Email Settings Modal */}
+      {showEmailSettings && <EmailSettingsModal onClose={() => setShowEmailSettings(false)} />}
 
       {/* Change Admin PIN Modal */}
       {showAdminPin && <ChangeAdminPinModal onClose={() => setShowAdminPin(false)} />}
@@ -526,6 +545,102 @@ function RepFormModal({ rep, onSave, onClose }) {
         <div style={{ display:'flex', gap:10, marginTop:22, justifyContent:'flex-end' }}>
           <button onClick={onClose} style={{ padding:'8px 18px', border:'1.5px solid #E5E7EB', borderRadius:8, background:'#fff', color:'#374151', fontSize:13, fontWeight:600, cursor:'pointer' }}>Cancel</button>
           <button onClick={() => canSave && onSave(form)} disabled={!canSave} style={{ padding:'8px 20px', border:'none', borderRadius:8, background:canSave?NAVY:'#E5E7EB', color:canSave?'#fff':'#9CA3AF', fontSize:13, fontWeight:700, cursor:canSave?'pointer':'not-allowed' }}>{rep ? 'Save Changes' : 'Add Rep'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── EMAIL SETTINGS MODAL ─────────────────────────────────────────
+function EmailSettingsModal({ onClose }) {
+  const [form,  setForm]  = useState8({ serviceId:'', templateId:'', publicKey:'', fromEmail:'', fromName:'' });
+  const [saved,  setSaved]  = useState8(false);
+  const [loading, setLoading] = useState8(true);
+  const [error,  setError]  = useState8('');
+
+  useEffect8(() => {
+    if (typeof db === 'undefined') { setLoading(false); return; }
+    db.collection('settings').doc('email').get().then(doc => {
+      if (doc.exists) setForm({ serviceId:'', templateId:'', publicKey:'', fromEmail:'', fromName:'', ...doc.data() });
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const set = (k, v) => { setForm(p => ({ ...p, [k]: v })); setError(''); };
+
+  const handleSave = () => {
+    if (!form.serviceId || !form.templateId || !form.publicKey || !form.fromEmail) {
+      setError('Service ID, Template ID, Public Key and From Email are all required.');
+      return;
+    }
+    db.collection('settings').doc('email').set(form)
+      .then(() => { setSaved(true); setTimeout(onClose, 700); })
+      .catch(() => setError('Failed to save. Please try again.'));
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center' }} onClick={onClose}>
+      <div style={{ background:'#fff', borderRadius:16, width:480, padding:'28px', boxShadow:'0 20px 60px rgba(0,0,0,0.2)', maxHeight:'90vh', overflowY:'auto' }} onClick={e=>e.stopPropagation()}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+          <div>
+            <h2 style={{ margin:0, fontSize:17, fontWeight:700, color:'#1A1D2E' }}>Email Settings</h2>
+            <p style={{ margin:'3px 0 0', fontSize:12, color:'#6B7280' }}>Configure EmailJS to send real emails from the CRM</p>
+          </div>
+          <button onClick={onClose} style={{ border:'none', background:'#F3F4F6', borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:16, color:'#6B7280' }}>×</button>
+        </div>
+
+        {/* Setup guide */}
+        <div style={{ background:'#EFF6FF', border:'1px solid #BFDBFE', borderRadius:10, padding:'12px 14px', marginBottom:20, fontSize:12, color:'#1E40AF', lineHeight:1.7 }}>
+          <div style={{ fontWeight:700, marginBottom:4 }}>📧 EmailJS Setup (free — 200 emails/month)</div>
+          <ol style={{ margin:0, paddingLeft:18 }}>
+            <li>Go to <strong>emailjs.com</strong> → create a free account</li>
+            <li>Add your email provider (Gmail, Outlook, etc.) → copy the <strong>Service ID</strong></li>
+            <li>Create an email template with these variables:<br/>
+              <code style={{ background:'#DBEAFE', padding:'1px 4px', borderRadius:3, fontSize:11 }}>{'{{to_email}} {{to_name}} {{company}} {{from_name}} {{reply_to}} {{subject}} {{message}}'}</code>
+            </li>
+            <li>Copy the <strong>Template ID</strong> and your account's <strong>Public Key</strong></li>
+            <li>Paste them below and click Save</li>
+          </ol>
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign:'center', padding:'20px', color:'#9CA3AF' }}>Loading…</div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+              <div>
+                <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>Service ID *</label>
+                <input value={form.serviceId} onChange={e=>set('serviceId',e.target.value)} placeholder="e.g. service_abc123" style={{ width:'100%', padding:'8px 10px', border:'1.5px solid #E5E7EB', borderRadius:8, fontSize:13, outline:'none', boxSizing:'border-box', fontFamily:'monospace' }} />
+              </div>
+              <div>
+                <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>Template ID *</label>
+                <input value={form.templateId} onChange={e=>set('templateId',e.target.value)} placeholder="e.g. template_xyz789" style={{ width:'100%', padding:'8px 10px', border:'1.5px solid #E5E7EB', borderRadius:8, fontSize:13, outline:'none', boxSizing:'border-box', fontFamily:'monospace' }} />
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>Public Key *</label>
+              <input value={form.publicKey} onChange={e=>set('publicKey',e.target.value)} placeholder="e.g. user_XXXXXXXXXXXXXXXXX" style={{ width:'100%', padding:'8px 10px', border:'1.5px solid #E5E7EB', borderRadius:8, fontSize:13, outline:'none', boxSizing:'border-box', fontFamily:'monospace' }} />
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+              <div>
+                <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>From Email *</label>
+                <input value={form.fromEmail} onChange={e=>set('fromEmail',e.target.value)} placeholder="KhuleK@memphisclean.com" style={{ width:'100%', padding:'8px 10px', border:'1.5px solid #E5E7EB', borderRadius:8, fontSize:13, outline:'none', boxSizing:'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5 }}>From Name</label>
+                <input value={form.fromName} onChange={e=>set('fromName',e.target.value)} placeholder="Khule — MemphisClean" style={{ width:'100%', padding:'8px 10px', border:'1.5px solid #E5E7EB', borderRadius:8, fontSize:13, outline:'none', boxSizing:'border-box' }} />
+              </div>
+            </div>
+            {error && <div style={{ fontSize:12, color:'#F43F5E', fontWeight:600 }}>⚠ {error}</div>}
+            {!error && saved && <div style={{ fontSize:12, color:'#10B981', fontWeight:600 }}>✓ Saved!</div>}
+          </div>
+        )}
+
+        <div style={{ display:'flex', gap:10, marginTop:22, justifyContent:'flex-end' }}>
+          <button onClick={onClose} style={{ padding:'8px 18px', border:'1.5px solid #E5E7EB', borderRadius:8, background:'#fff', color:'#374151', fontSize:13, fontWeight:600, cursor:'pointer' }}>Cancel</button>
+          <button onClick={handleSave} style={{ padding:'8px 20px', border:'none', borderRadius:8, background:saved?'#10B981':NAVY, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', transition:'background 0.2s' }}>
+            {saved ? '✓ Saved!' : 'Save Settings'}
+          </button>
         </div>
       </div>
     </div>
