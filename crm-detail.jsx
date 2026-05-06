@@ -17,15 +17,15 @@ function RecordingPlayer({ callSid, currentUser }) {
     setState('loading');
     try {
       const settings = await (typeof fetchVoiceSettings === 'function' ? fetchVoiceSettings() : Promise.resolve({}));
-      const baseUrl = settings.tokenUrl ? settings.tokenUrl.replace(/\/[^/]+$/, '') : null;
-      if (!baseUrl) { setState('error'); return; }
+      const tokenUrl = settings.tokenUrl;
+      if (!tokenUrl) { setState('error'); return; }
 
-      const recResp = await fetch(`${baseUrl}/recordings?callSid=${encodeURIComponent(callSid)}`);
+      const recResp = await fetch(`${tokenUrl}?action=recordings&callSid=${encodeURIComponent(callSid)}`);
       if (!recResp.ok) { setState('error'); return; }
       const recData = await recResp.json();
       if (!recData.sid) { setState('notfound'); return; }
 
-      const playResp = await fetch(`${baseUrl}/play?sid=${encodeURIComponent(recData.sid)}`);
+      const playResp = await fetch(`${tokenUrl}?action=play&sid=${encodeURIComponent(recData.sid)}`);
       if (!playResp.ok) { setState('error'); return; }
       const playData = await playResp.json();
       if (!playData.audio) { setState('error'); return; }
