@@ -177,9 +177,29 @@ function ImportLeads({ onImport, existingContacts = [] }) {
         assignedTo: 'u1',
       };
     }).filter(c => c && (c.company !== 'Unknown Company' || c.phone));
+
+    // Group contacts with the same company name into one record with additionalContacts
+    const companyMap = new Map();
+    newContacts.forEach(c => {
+      const key = normalizeCompany(c.company);
+      if (!companyMap.has(key)) {
+        companyMap.set(key, { ...c, additionalContacts: [] });
+      } else {
+        companyMap.get(key).additionalContacts.push({
+          id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+          name: c.contactPerson,
+          title: c.title,
+          phone: c.phone,
+          altPhone: c.altPhone || '',
+          email: c.email,
+        });
+      }
+    });
+    const groupedContacts = Array.from(companyMap.values());
+
     setTimeout(() => {
-      onImport(newContacts);
-      setImportCount(newContacts.length);
+      onImport(groupedContacts);
+      setImportCount(groupedContacts.length);
       setImporting(false);
       setStep('done');
     }, 600);
