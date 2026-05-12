@@ -440,6 +440,7 @@ function ContactDetail({ contact, onClose, onUpdate, onLogCall, currentUser }) {
     setDialerPrefilledDuration(duration);
     setDialerCallSid(callSid || null);
     setShowDialer(false);
+    setShowManualDialer(false);
     setShowCallModal(true);
   };
 
@@ -630,7 +631,7 @@ function ContactDetail({ contact, onClose, onUpdate, onLogCall, currentUser }) {
       </div>
 
       {showDialer && <TwilioDialer contact={dialerContact || contact} onClose={()=>{setShowDialer(false);setDialerContact(null);}} onCallEnded={handleCallEnded} currentUser={currentUser} />}
-      {showManualDialer && <TwilioManualDialer onClose={()=>setShowManualDialer(false)} contactName={contact.company} defaultNumber={contact.altPhone||''} currentUser={currentUser} />}
+      {showManualDialer && <TwilioManualDialer onClose={()=>setShowManualDialer(false)} onCallEnded={handleCallEnded} contactName={contact.company} defaultNumber={contact.altPhone||''} currentUser={currentUser} />}
       {showCallModal && <CallLogModal contact={contact} prefilledDuration={dialerPrefilledDuration} prefilledCallSid={dialerCallSid} onSave={handleLogSave} onClose={()=>{setShowCallModal(false);setDialerPrefilledDuration(null);setDialerCallSid(null);}} />}
       {showEditModal && <AddContactModal editContact={contact} onSave={(updated)=>{onUpdate(updated);setShowEditModal(false);}} onClose={()=>setShowEditModal(false)} />}
       {showEmailModal && (

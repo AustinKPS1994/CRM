@@ -473,7 +473,7 @@ const DIAL_KEYS = [
   { k:'*', sub:'' }, { k:'0', sub:'+' }, { k:'#', sub:'' },
 ];
 
-function TwilioManualDialer({ onClose, contactName, defaultNumber, currentUser }) {
+function TwilioManualDialer({ onClose, contactName, defaultNumber, currentUser, onCallEnded }) {
   const [dialNumber,   setDialNumber]   = useState9(defaultNumber || '');
   const [status,       setStatus]       = useState9('idle'); // idle|init|connecting|connected|ended|error
   const [error,        setError]        = useState9('');
@@ -482,9 +482,10 @@ function TwilioManualDialer({ onClose, contactName, defaultNumber, currentUser }
   const [showKeypad,   setShowKeypad]   = useState9(false);
   const [showSettings, setShowSettings] = useState9(false);
 
-  const deviceRef = useRef9(null);
-  const callRef   = useRef9(null);
-  const timerRef  = useRef9(null);
+  const deviceRef  = useRef9(null);
+  const callRef    = useRef9(null);
+  const timerRef   = useRef9(null);
+  const callSidRef = useRef9(null);
 
   const fmtDuration = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 
@@ -551,8 +552,27 @@ function TwilioManualDialer({ onClose, contactName, defaultNumber, currentUser }
       const call = await device.connect({ params: { To: num } });
       callRef.current = call;
 
-      call.on('accept', () => { if (mounted) { setStatus('connected'); timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000); } });
-      call.on('disconnect', () => { if (mounted) { clearInterval(timerRef.current); setStatus('ended'); } });
+      call.on('accept', () => {
+        if (!mounted) return;
+        const sid = call.parameters?.CallSid || call.parameters?.callsid || null;
+        callSidRef.current = sid;
+        if (!sid) {
+          setTimeout(() => {
+            const retrySid = call.parameters?.CallSid || call.parameters?.callsid || null;
+            if (retrySid) callSidRef.current = retrySid;
+          }, 800);
+        }
+        setStatus('connected');
+        timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
+      });
+      call.on('disconnect', () => {
+        if (!mounted) return;
+        if (!callSidRef.current) {
+          callSidRef.current = call.parameters?.CallSid || call.parameters?.callsid || null;
+        }
+        clearInterval(timerRef.current);
+        setStatus('ended');
+      });
       call.on('error', err => { if (mounted) { clearInterval(timerRef.current); setStatus('error'); setError(err.message || 'Call error'); } });
 
     } catch (err) {
@@ -673,8 +693,13 @@ function TwilioManualDialer({ onClose, contactName, defaultNumber, currentUser }
           )}
 
           {(status==='ended'||status==='error') && (
-            <button onClick={onClose} style={{ width:'100%', padding:'13px', border:'none', borderRadius:14, background:NAVY, color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer' }}>
-              {status==='ended' ? `Done${seconds>0?' · '+fmtDuration(seconds):''}` : 'Close'}
+            <button onClick={() => {
+              if (status === 'ended' && onCallEnded) {
+                onCallEnded(seconds > 0 ? fmtDuration(seconds) : null, callSidRef.current);
+              }
+              onClose();
+            }} style={{ width:'100%', padding:'13px', border:'none', borderRadius:14, background:NAVY, color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer' }}>
+              {status === 'ended' ? `Log Call${seconds > 0 ? ` (${fmtDuration(seconds)})` : ''}` : 'Close'}
             </button>
           )}
 
